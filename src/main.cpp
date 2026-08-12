@@ -1,66 +1,82 @@
-#include "bitcoinkernel_wrapper.h"
+#include "node/kernel_node.h"
+#include "util/hex.h"
+#include "util/log.h"
 
-#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <iostream>
-#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
 
 namespace {
 
-std::string to_display_hex(std::span<const std::byte> bytes)
+void print_usage()
 {
-    static constexpr char digits[] = "0123456789abcdef";
-    std::string hex;
-    hex.reserve(bytes.size() * 2);
-    for (auto it = bytes.rbegin(); it != bytes.rend(); ++it) {
-        const auto value = static_cast<unsigned char>(*it);
-        hex.push_back(digits[value >> 4]);
-        hex.push_back(digits[value & 0x0f]);
-    }
-    return hex;
+    std::cerr << "usage: bitcoinkernel_node [options]\n"
+                 "  --chain <name>    mainnet | testnet | testnet4 | signet | regtest (default: regtest)\n"
+                 "  --datadir <path>  data directory (default: ./node_data/<chain>)\n"
+                 "  --help\n";
 }
 
-class StdoutLog
+bool parse_args(int argc, char* argv[], node::KernelConfig& config)
 {
-public:
-    void LogMessage(std::string_view message)
-    {
-        std::cout << "[kernel] " << message;
-        if (!message.ends_with('\n')) std::cout << '\n';
+    const std::span args{argv, static_cast<std::size_t>(argc)};
+    std::string data_dir;
+
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        const std::string_view arg{args[i]};
+
+        if (arg == "--help" || arg == "-h") return false;
+
+        const bool has_value = i + 1 < args.size();
+        if (arg == "--chain" && has_value) {
+            const auto chain = node::parse_chain_type(args[++i]);
+            if (!chain) {
+                std::cerr << "unknown chain: " << args[i] << '\n';
+                return false;
+            }
+            config.chain = *chain;
+        } else if (arg == "--datadir" && has_value) {
+            data_dir = args[++i];
+        } else {
+            std::cerr << "unrecognised argument: " << arg << '\n';
+            return false;
+        }
     }
-};
+
+    if (data_dir.empty()) {
+        data_dir = (std::filesystem::path{"./node_data"} / node::chain_name(config.chain)).string();
+    }
+    config.data_dir = data_dir;
+    config.blocks_dir = (std::filesystem::path{data_dir} / "blocks").string();
+    return true;
+}
 
 } // namespace
 
 int main(int argc, char* argv[])
 {
-    const std::string data_dir{argc > 1 ? argv[1] : "./node_data"};
-    const std::string blocks_dir{(std::filesystem::path{data_dir} / "blocks").string()};
+    node::KernelConfig config;
+    if (!parse_args(argc, argv, config)) {
+        print_usage();
+        return EXIT_FAILURE;
+    }
 
     try {
-        btck::Logger<StdoutLog> logger{std::make_unique<StdoutLog>()};
+        node::KernelNode node{std::move(config)};
 
-        btck::ChainParams chain_params{btck::ChainType::REGTEST};
-
-        btck::ContextOptions context_options;
-        context_options.SetChainParams(chain_params);
-        btck::Context context{context_options};
-
-        btck::ChainstateManagerOptions chainman_options{context, data_dir, blocks_dir};
-        chainman_options.SetWorkerThreads(4);
-
-        btck::ChainMan chainman{context, chainman_options};
-
-        const auto chain = chainman.GetChain();
+        const auto chain = node.chainman().GetChain();
         const auto tip = chain.GetByHeight(chain.Height());
 
-        std::cout << "data dir: " << data_dir << '\n'
-                  << "tip height: " << chain.Height() << '\n'
-                  << "tip hash: " << to_display_hex(tip.GetHash().ToBytes()) << '\n';
+        util::log(std::format("chain {} data dir {}",
+                              node::chain_name(node.config().chain),
+                              node.config().data_dir));
+        util::log(std::format("tip {} {}",
+                              node.tip_height(),
+                              util::to_display_hex(tip.GetHash().ToBytes())));
+        util::log(std::format("best header {}", node.best_header_height()));
     } catch (const std::exception& error) {
         std::cerr << "fatal: " << error.what() << '\n';
         return EXIT_FAILURE;
