@@ -28,6 +28,7 @@ cmake --build --preset conan-release
 - Connects to one peer found via DNS seeds and performs the version handshake
 - Syncs headers from connected peer
 - validation is done through `libbitcoinkernel` C++ wrapper.
+- Currently it has been tested only on signet and regtest.
 
 The data directory holds the kernel's `blocks/` and `chainstate/` — the same
 layout Bitcoin Core uses plus `peers.txt` for stroing addresses.
