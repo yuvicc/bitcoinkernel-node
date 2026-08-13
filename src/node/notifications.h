@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 
@@ -34,8 +35,16 @@ public:
     [[nodiscard]] std::optional<std::string> fatal_error() const;
 
 private:
+    // Both handlers fire once per header/block, so log lines are thinned out.
+    bool should_log(std::int64_t height, std::int64_t& last_logged, std::int64_t interval);
+
     mutable std::mutex m_mutex;
     std::optional<std::string> m_fatal_error;
+    std::int64_t m_last_logged_tip{-1};
+    std::int64_t m_last_logged_header{-1};
+    // The kernel clears warnings after every block, so only warnings we saw
+    // raised are worth reporting as cleared.
+    std::set<std::int64_t> m_active_warnings;
 };
 
 // Validation verdicts

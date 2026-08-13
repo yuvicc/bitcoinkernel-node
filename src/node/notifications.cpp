@@ -57,8 +57,19 @@ std::string_view describe(btck::Warning warning)
 
 } // namespace
 
+bool NodeNotifications::should_log(std::int64_t height, std::int64_t& last_logged, std::int64_t interval)
+{
+    const std::lock_guard lock{m_mutex};
+    if (last_logged >= 0 && height - last_logged < interval) return false;
+    last_logged = height;
+    return true;
+}
+
 void NodeNotifications::BlockTipHandler(btck::SynchronizationState state, btck::BlockTreeEntry entry, double verification_progress)
 {
+    const bool synced = state != btck::SynchronizationState::INIT_DOWNLOAD;
+    if (!synced && !should_log(entry.GetHeight(), m_last_logged_tip, 1000)) return;
+
     util::log(std::format("tip {} {} [{}] progress {:.2f}%",
                           entry.GetHeight(),
                           util::to_display_hex(entry.GetHash().ToBytes()),
@@ -68,6 +79,9 @@ void NodeNotifications::BlockTipHandler(btck::SynchronizationState state, btck::
 
 void NodeNotifications::HeaderTipHandler(btck::SynchronizationState state, std::int64_t height, std::int64_t timestamp, bool presync)
 {
+    const bool synced = state != btck::SynchronizationState::INIT_DOWNLOAD;
+    if (!synced && !should_log(height, m_last_logged_header, 10000)) return;
+
     util::log(std::format("headers {} [{}]{} timestamp {}",
                           height,
                           describe(state),
@@ -77,11 +91,19 @@ void NodeNotifications::HeaderTipHandler(btck::SynchronizationState state, std::
 
 void NodeNotifications::WarningSetHandler(btck::Warning warning, std::string_view message)
 {
+    {
+        const std::lock_guard lock{m_mutex};
+        if (!m_active_warnings.insert(static_cast<std::int64_t>(warning)).second) return;
+    }
     util::log(std::format("warning: {}: {}", describe(warning), message));
 }
 
 void NodeNotifications::WarningUnsetHandler(btck::Warning warning)
 {
+    {
+        const std::lock_guard lock{m_mutex};
+        if (m_active_warnings.erase(static_cast<std::int64_t>(warning)) == 0) return;
+    }
     util::log(std::format("warning cleared: {}", describe(warning)));
 }
 
