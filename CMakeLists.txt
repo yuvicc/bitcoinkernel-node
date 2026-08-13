@@ -46,10 +46,15 @@ find_package(Threads REQUIRED)
 
 add_executable(bitcoinkernel_node
     src/main.cpp
+    src/node/addr_manager.cpp
+    src/node/dns_seeds.cpp
     src/node/kernel_node.cpp
     src/node/notifications.cpp
+    src/node/p2p.cpp
+    src/node/sync.cpp
     src/util/hex.cpp
     src/util/log.cpp
+    src/util/signal.cpp
 )
 
 target_include_directories(bitcoinkernel_node PRIVATE
