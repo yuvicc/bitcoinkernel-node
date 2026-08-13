@@ -1,6 +1,7 @@
 # bitcoinkernel-node
 
 A minimal Bitcoin full node that connects to a single peer, downloads the blockchain, and validates each block. The project demonstrates how to build a minimal full-validation node using [libbitcoinkernel](https://github.com/bitcoin/bitcoin), Bitcoin Core's validation engine library for external applications and a [P2P library](https://github.com/yuvicc/binary_p2p) for serializing / deserializing p2p messages.
+
 ```
 peer ──request_headers──▶ BlockHeader ─────▶ ProcessBlockHeader
 peer ──request_block ───▶ BlockMessage ────▶ ProcessBlock
