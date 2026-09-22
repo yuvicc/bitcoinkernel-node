@@ -20,7 +20,15 @@ cmake --build --preset conan-release
 ```bash
 # signet, peers found via DNS seeds
 ./build/build/Release/bitcoinkernel_node --chain signet --datadir ~/.bitcoinkernel-node/signet
+
+# same, but in the background; stop it with `kill <pid>` (SIGTERM shuts down cleanly)
+./build/build/Release/bitcoinkernel_node --chain signet --datadir ~/.bitcoinkernel-node/signet --daemon
+tail -f ~/.bitcoinkernel-node/signet/debug.log
 ```
+
+Every run appends timestamped output to `<datadir>/debug.log`; with `--daemon`
+that file is the only place it goes. See [doc/daemon.md](doc/daemon.md) for
+running it in the background.
 
 ## What it does
 

@@ -3,6 +3,7 @@
 #include "node/kernel_node.h"
 #include "node/p2p.h"
 #include "node/sync.h"
+#include "util/daemon.h"
 #include "util/hex.h"
 #include "util/log.h"
 #include "util/signal.h"
@@ -26,6 +27,7 @@ namespace {
 struct Options {
     node::KernelConfig kernel;
     std::string peer;
+    bool daemon{false};
 };
 
 void print_usage()
@@ -34,6 +36,7 @@ void print_usage()
                  "  --chain <name>      mainnet | testnet | testnet4 | signet | regtest (default: regtest)\n"
                  "  --datadir <path>    data directory (default: ./node_data/<chain>)\n"
                  "  --peer <host:port>  peer to sync from (default: DNS seeds, or 127.0.0.1 on regtest)\n"
+                 "  --daemon            run in the background; output goes to <datadir>/debug.log only\n"
                  "  --help\n";
 }
 
@@ -46,6 +49,10 @@ bool parse_args(int argc, char* argv[], Options& options)
         const std::string_view arg{args[i]};
 
         if (arg == "--help" || arg == "-h") return false;
+        if (arg == "--daemon") {
+            options.daemon = true;
+            continue;
+        }
 
         const bool has_value = i + 1 < args.size();
         if (arg == "--chain" && has_value) {
@@ -142,6 +149,24 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    // debug.log is opened before forking so a bad datadir is reported on the
+    // terminal, and the fork happens before the kernel starts any threads.
+    const std::filesystem::path log_path = std::filesystem::path{options.kernel.data_dir} / "debug.log";
+    std::error_code error;
+    std::filesystem::create_directories(options.kernel.data_dir, error);
+    if (error || !util::open_log_file(log_path)) {
+        std::cerr << "cannot open log file " << log_path.string() << '\n';
+        return EXIT_FAILURE;
+    }
+
+    if (options.daemon) {
+        util::set_print_to_console(false);
+        if (!util::daemonize(log_path)) {
+            util::log("failed to daemonize");
+            return EXIT_FAILURE;
+        }
+    }
+
     util::install_signal_handlers();
 
     try {
@@ -163,12 +188,14 @@ int main(int argc, char* argv[])
         if (pinned) {
             const auto address = node::parse_peer_address(options.peer, node::default_port(node.config().chain));
             if (!address) {
-                std::cerr << "invalid peer address: " << options.peer << '\n';
+                util::log(std::format("invalid peer address: {}", options.peer));
                 return EXIT_FAILURE;
             }
             const std::array pinned_address{*address};
             addresses.add(pinned_address);
         }
+
+        util::notify_daemon_started();
 
         while (!util::shutdown_requested()) {
             const auto candidate = pinned
@@ -217,7 +244,7 @@ int main(int argc, char* argv[])
         addresses.save();
         util::log(std::format("shutting down at tip {}", node.tip_height()));
     } catch (const std::exception& error) {
-        std::cerr << "fatal: " << error.what() << '\n';
+        util::log(std::format("fatal: {}", error.what()));
         return EXIT_FAILURE;
     }
 
