@@ -52,6 +52,7 @@ add_executable(bitcoinkernel_node
     src/node/notifications.cpp
     src/node/p2p.cpp
     src/node/sync.cpp
+    src/util/daemon.cpp
     src/util/hex.cpp
     src/util/log.cpp
     src/util/signal.cpp
