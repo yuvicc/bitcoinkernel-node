@@ -5,7 +5,17 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(binary_p2p CONFIG REQUIRED)
+include(FetchContent)
+
+# Pass -DFETCHCONTENT_SOURCE_DIR_BINARY_P2P=<path> to build against a local checkout
+FetchContent_Declare(binary_p2p
+    GIT_REPOSITORY https://github.com/yuvicc/binary_p2p.git
+    GIT_TAG 68f870dc1eec56b378f62b7e814640ba3745c0a1
+)
+
+# Don't build binary_p2p's tests as part of this project
+set(BUILD_TESTING OFF)
+FetchContent_MakeAvailable(binary_p2p)
 
 set(BITCOINKERNEL_ROOT "/usr/local" CACHE PATH "Prefix where libbitcoinkernel is installed")
 option(BITCOINKERNEL_STATIC "Link libbitcoinkernel statically" ON)
@@ -64,7 +74,7 @@ target_include_directories(bitcoinkernel_node PRIVATE
 )
 
 target_link_libraries(bitcoinkernel_node PRIVATE
-    binary_p2p::binary_p2p
+    binary_p2p
     bitcoinkernel::bitcoinkernel
     Threads::Threads
     ${CMAKE_DL_LIBS}

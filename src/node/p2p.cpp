@@ -57,8 +57,15 @@ std::expected<TcpConnection, std::string> open_connection(const PeerAddress& add
     const std::unique_ptr<addrinfo, AddrinfoDeleter> guard{resolved};
 
     for (const addrinfo* entry = resolved; entry != nullptr; entry = entry->ai_next) {
-        const int fd = ::socket(entry->ai_family, entry->ai_socktype | SOCK_NONBLOCK, entry->ai_protocol);
+        const int fd = ::socket(entry->ai_family, entry->ai_socktype, entry->ai_protocol);
         if (fd < 0) continue;
+
+        // SOCK_NONBLOCK is Linux-only, so set O_NONBLOCK separately for macOS
+        const int initial_flags = ::fcntl(fd, F_GETFL, 0);
+        if (initial_flags < 0 || ::fcntl(fd, F_SETFL, initial_flags | O_NONBLOCK) != 0) {
+            ::close(fd);
+            continue;
+        }
 
         int status = ::connect(fd, entry->ai_addr, entry->ai_addrlen);
         if (status != 0 && errno == EINPROGRESS) {
@@ -182,7 +189,7 @@ connect_and_handshake(const PeerAddress& address,
                                            address.host, address.port, describe(version.error())));
     }
 
-    return PeerConnection{.peer = std::move(peer), .version = std::move(*version), .socket = socket};
+    return PeerConnection{.peer = std::move(peer), .version = std::move(version->version), .socket = socket};
 }
 
 bool set_receive_timeout(int socket, std::chrono::seconds timeout)

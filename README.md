@@ -11,19 +11,23 @@ peer ──request_block ───▶ BlockMessage ────▶ ProcessBlock
 ## Build
 
 ```bash
-conan install . --output-folder=build --build=missing -s build_type=Release -s compiler.cppstd=23
-cmake --preset conan-release
-cmake --build --preset conan-release
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ```
+
+[binary_p2p] is fetched automatically by CMake. To build against a local
+checkout instead, add `-DFETCHCONTENT_SOURCE_DIR_BINARY_P2P=/path/to/binary_p2p`.
+libbitcoinkernel is looked up under `/usr/local`; override with
+`-DBITCOINKERNEL_ROOT=<prefix>`.
 
 ## Run
 
 ```bash
 # signet, peers found via DNS seeds
-./build/build/Release/bitcoinkernel_node --chain signet --datadir ~/.bitcoinkernel-node/signet
+./build/bitcoinkernel_node --chain signet --datadir ~/.bitcoinkernel-node/signet
 
 # same, but in the background; stop it with `kill <pid>` (SIGTERM shuts down cleanly)
-./build/build/Release/bitcoinkernel_node --chain signet --datadir ~/.bitcoinkernel-node/signet --daemon
+./build/bitcoinkernel_node --chain signet --datadir ~/.bitcoinkernel-node/signet --daemon
 tail -f ~/.bitcoinkernel-node/signet/debug.log
 ```
 
@@ -43,4 +47,3 @@ layout Bitcoin Core uses plus `peers.txt` for stroing addresses.
 
 [binary_p2p]: https://github.com/yuvicc/binary_p2p
 [kernel]: https://github.com/bitcoin/bitcoin/blob/master/src/kernel/bitcoinkernel.h
-[conan]: https://conan.io
